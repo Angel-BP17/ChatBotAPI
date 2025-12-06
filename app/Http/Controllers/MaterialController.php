@@ -2,12 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\SupabaseStorageService;
 use Illuminate\Http\Request;
 use Smalot\PdfParser\Parser as PdfParser;
 use PhpOffice\PhpWord\IOFactory;
 
 class MaterialController extends Controller
 {
+
+    protected SupabaseStorageService $supabase;
+
+    public function __construct(SupabaseStorageService $supabase)
+    {
+        $this->supabase = $supabase;
+    }
     /**
      * Extrae texto de archivos PDF, DOCX o TXT
      */
@@ -23,7 +31,7 @@ class MaterialController extends Controller
             $extension = strtolower($file->getClientOriginalExtension());
 
             // Extraer texto según el tipo de archivo
-            $text = match($extension) {
+            $text = match ($extension) {
                 'pdf' => $this->extractFromPDF($file),
                 'docx' => $this->extractFromDOCX($file),
                 'txt' => $this->extractFromTXT($file),
@@ -45,6 +53,54 @@ class MaterialController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Error al extraer texto: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * NUEVO: Sube un archivo .txt al bucket de Supabase.
+     *
+     * Body esperado:
+     *  - file: archivo .txt (multipart/form-data)
+     *  - path (opcional): ruta lógica dentro del bucket, ej: "cursos/cta/tema1"
+     */
+    public function uploadTxtToSupabase(Request $request)
+    {
+        try {
+            // Solo se permiten .txt, como indicaste
+            $request->validate([
+                'file' => 'required|file|mimes:txt|max:10240', // máx 10MB
+                'path' => 'nullable|string',
+            ]);
+
+            $file = $request->file('file');
+            $path = $request->input('path', ''); // ej: "cursos/cta/tema1"
+
+            // Subir al bucket usando el servicio
+            $objectPath = $this->supabase->uploadTxt($file, $path);
+            $publicUrl = $this->supabase->getPublicUrl($objectPath);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Archivo .txt subido correctamente a Supabase',
+                'object_path' => $objectPath,
+                'public_url' => $publicUrl,
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Archivo inválido. Solo se permiten archivos .txt (máx 10MB)',
+            ], 422);
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error al subir a Supabase: ' . $e->getMessage(),
+            ], 500);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Error inesperado: ' . $e->getMessage(),
             ], 500);
         }
     }

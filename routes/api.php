@@ -23,3 +23,5 @@ Route::post('/resumenes/generar', [SummaryGeneratorController::class, 'generate'
 Route::post('/evaluador/evaluar', [AnswerEvaluatorController::class, 'evaluate']);
 
 Route::post('/materiales/extract-text', [MaterialController::class, 'extractText']);
+
+Route::post('/materiales/upload', [MaterialController::class, 'uploadTxtToSupabase']);
