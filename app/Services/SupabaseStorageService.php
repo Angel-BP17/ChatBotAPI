@@ -32,13 +32,16 @@ class SupabaseStorageService
     {
         // Contenido del archivo
         $contents = file_get_contents($file->getRealPath());
+        $contents = mb_convert_encoding(
+            $contents,
+            'UTF-8',
+            mb_detect_encoding($contents, 'UTF-8, ISO-8859-1, Windows-1252', true) ?: 'UTF-8'
+        );
 
         // Nombre final del archivo en el bucket
-        $fileName = $file->getClientOriginalName();               // ejemplo: tema1.txt
-        $folderPath = trim($path, '/');                             // "cursos/cta/tema1"
-        $objectPath = $folderPath
-            ? $folderPath . '/' . $fileName
-            : $fileName;                                           // "cursos/cta/tema1/tema1.txt"
+        $fileName = $file->getClientOriginalName();
+        $folderPath = trim($path, '/');
+        $objectPath = $folderPath ? "{$folderPath}/{$fileName}" : $fileName;
 
         // Endpoint REST de Supabase Storage
         $endpoint = "{$this->url}/storage/v1/object/{$this->bucket}/{$objectPath}";
@@ -47,15 +50,16 @@ class SupabaseStorageService
         $response = Http::withHeaders([
             'apikey' => $this->apiKey,
             'Authorization' => 'Bearer ' . $this->apiKey,
-            'Content-Type' => 'text/plain', // para .txt
-        ])->post($endpoint, $contents);
+            'Content-Type' => 'text/plain; charset=utf-8',
+            'Content-Transfer-Encoding' => 'binary',
+        ])->withBody($contents, 'text/plain; charset=utf-8')->post($endpoint);
 
         if (!$response->successful()) {
             throw new \RuntimeException('Error al subir archivo a Supabase: ' . $response->body());
         }
 
-        // Lo que normalmente guardarías en BD para luego reconstruir la URL o buscar el objeto
-        return $objectPath; // ej: "cursos/cta/tema1/tema1.txt"
+        // Ruta que se puede guardar en BD
+        return $objectPath;
     }
 
     /**
@@ -65,7 +69,6 @@ class SupabaseStorageService
     {
         $objectPath = ltrim($objectPath, '/');
 
-        // Formato típico de Supabase: /storage/v1/object/public/{bucket}/{objectPath}
         return "{$this->url}/storage/v1/object/public/{$this->bucket}/{$objectPath}";
     }
 }
