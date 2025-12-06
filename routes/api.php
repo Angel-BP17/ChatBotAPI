@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AnswerEvaluatorController;
+use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\QuestionGeneratorController;
 use App\Http\Controllers\SummaryGeneratorController;
 use Illuminate\Http\Request;
@@ -20,3 +21,5 @@ Route::post('/cuestionarios/generar', [QuestionGeneratorController::class, 'gene
 Route::post('/resumenes/generar', [SummaryGeneratorController::class, 'generate']);
 
 Route::post('/evaluador/evaluar', [AnswerEvaluatorController::class, 'evaluate']);
+
+Route::post('/materiales/extract-text', [MaterialController::class, 'extractText']);
