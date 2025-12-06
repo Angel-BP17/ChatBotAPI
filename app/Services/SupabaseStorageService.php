@@ -71,4 +71,49 @@ class SupabaseStorageService
 
         return "{$this->url}/storage/v1/object/public/{$this->bucket}/{$objectPath}";
     }
+
+    /**
+     * Lista los archivos dentro del bucket (opcionalmente dentro de una carpeta)
+     */
+    public function listFiles(string $path = ''): array
+    {
+        $endpoint = "{$this->url}/storage/v1/object/list/{$this->bucket}";
+
+        // Supabase requiere POST con JSON para listar; GET devuelve 404 Bucket not found
+        $response = Http::withHeaders([
+            'apikey' => $this->apiKey,
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->post($endpoint, [
+            'prefix' => ltrim($path, '/'),
+            'limit' => 1000,
+            'offset' => 0,
+            'sortBy' => ['column' => 'name', 'order' => 'asc'],
+        ]);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('Error al listar archivos: ' . $response->body());
+        }
+
+        return $response->json(); // Devuelve array de objetos con metadata
+    }
+
+    /**
+     * Descarga un archivo y devuelve su contenido como string
+     */
+    public function downloadFile(string $objectPath): string
+    {
+        $endpoint = "{$this->url}/storage/v1/object/{$this->bucket}/" . ltrim($objectPath, '/');
+
+        $response = Http::withHeaders([
+            'apikey' => $this->apiKey,
+            'Authorization' => 'Bearer ' . $this->apiKey,
+        ])->get($endpoint);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('Error al descargar archivo: ' . $response->body());
+        }
+
+        return $response->body();
+    }
 }

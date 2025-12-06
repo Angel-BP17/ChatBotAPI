@@ -25,3 +25,7 @@ Route::post('/evaluador/evaluar', [AnswerEvaluatorController::class, 'evaluate']
 Route::post('/materiales/extract-text', [MaterialController::class, 'extractText']);
 
 Route::post('/materiales/upload', [MaterialController::class, 'uploadTxtToSupabase']);
+
+Route::get('/materiales/list-topics', [MaterialController::class, 'listTxtFiles']);
+
+Route::get('/materiales/list-topics-with-content', [MaterialController::class, 'listTxtFilesWithContent']);

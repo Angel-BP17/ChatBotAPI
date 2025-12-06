@@ -105,6 +105,74 @@ class MaterialController extends Controller
         }
     }
 
+    public function listTxtFiles(Request $request)
+    {
+        try {
+            // Carpeta opcional enviada desde el front (ej.: cursos/cta/tema1)
+            $path = $request->input('path', '');
+
+            $files = $this->supabase->listFiles($path);
+
+            // Filtrar solo archivos .txt
+            $txtFiles = array_filter($files, function ($file) {
+                return isset($file['name']) && str_ends_with(strtolower($file['name']), '.txt');
+            });
+
+            // Retornar solo nombres
+            $names = array_map(function ($file) {
+                return $file['name'];
+            }, $txtFiles);
+
+            return response()->json([
+                'success' => true,
+                'files' => $names
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function listTxtFilesWithContent(Request $request)
+    {
+        try {
+            $path = $request->input('path', '');
+
+            $files = $this->supabase->listFiles($path);
+
+            $txtFiles = array_filter($files, function ($file) {
+                return isset($file['name']) && str_ends_with(strtolower($file['name']), '.txt');
+            });
+
+            $result = [];
+
+            foreach ($txtFiles as $file) {
+                $objectPath = $path ? "$path/{$file['name']}" : $file['name'];
+                $content = $this->supabase->downloadFile($objectPath);
+
+                $result[] = [
+                    'name' => $file['name'],
+                    'content' => $content
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'files' => $result
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
     /**
      * Extrae texto de un archivo PDF
      */
