@@ -16,11 +16,11 @@ class SummaryGeneratorController extends Controller
 
     public function generate(Request $request)
     {
-        // ✅ Validación según tu formato
         $validated = $request->validate([
             'tema' => 'required|string',
             'extensionParrafos' => 'required|integer|min:1|max:10',
             'formato' => 'required|string|in:simple,detallado,bullet-points',
+            'contenidoMaterial' => 'required|string',
         ]);
 
         $topic = $validated['tema'];
@@ -30,10 +30,10 @@ class SummaryGeneratorController extends Controller
         $summary = $this->gemini->generateSummary(
             $topic,
             $paragraphs,
-            $format
+            $format,
+            $validated['contenidoMaterial']
         );
 
-        // Si hubo error en el servicio, devolvemos 500
         if (isset($summary['error']) && $summary['error'] === true) {
             return response()->json($summary, 500);
         }

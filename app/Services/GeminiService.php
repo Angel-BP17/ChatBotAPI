@@ -16,26 +16,30 @@ class GeminiService
     }
 
     /**
-     * Generar preguntas de un curso usando Gemini
+     * Generar preguntas de un curso usando Gemini.
      */
     public function generateQuestions(
         string $courseName,
         string $topicTitle,
         int $numQuestions,
-        string $questionType
+        string $questionType,
+        string $materialContent = ''
     ): array {
-
-        // Mapeo de tipo humano → tipo técnico
         $typeDescription = match ($questionType) {
-            'multiple_choice' => 'solo preguntas de opción múltiple con 4 alternativas y una única respuesta correcta',
+            'multiple_choice' => 'solo preguntas de opcion multiple con 4 alternativas y una unica respuesta correcta',
             'true_false' => 'solo preguntas de verdadero/falso',
             'open' => 'solo preguntas abiertas que requieran desarrollo',
-            default => 'una mezcla de opción múltiple, verdadero/falso y preguntas abiertas',
+            default => 'una mezcla de opcion multiple, verdadero/falso y preguntas abiertas',
         };
 
         $prompt = "
-Actúa como un docente experto del curso \"$courseName\".
-Genera $numQuestions preguntas sobre el tema \"$topicTitle\".
+Actua como un docente experto del curso \"$courseName\".
+Genera $numQuestions preguntas sobre el tema \"$topicTitle\" usando exclusivamente el siguiente material como fuente. No inventes datos fuera del material.
+
+Material de referencia:
+<<<MATERIAL
+$materialContent
+<<<END
 
 - Tipo de preguntas: $typeDescription.
 - Devuelve la respuesta en formato JSON con esta estructura:
@@ -44,17 +48,16 @@ Genera $numQuestions preguntas sobre el tema \"$topicTitle\".
   {
     \"question\": \"...\",
     \"type\": \"multiple_choice|true_false|open\",
-    \"options\": [\"opción 1\", \"opción 2\", \"opción 3\", \"opción 4\"], // null o [] si no aplica
+    \"options\": [\"opcion 1\", \"opcion 2\", \"opcion 3\", \"opcion 4\"], // null o [] si no aplica
     \"answer\": \"respuesta correcta o ejemplo de respuesta\"
   }
 ]
 
 IMPORTANTE:
-- Devuelve SOLO el JSON válido.
-- No agregues texto antes o después del JSON.
+- Devuelve SOLO el JSON valido.
+- No agregues texto antes o despues del JSON.
         ";
 
-        // Llamada HTTP a Gemini
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post(
@@ -79,21 +82,14 @@ IMPORTANTE:
         }
 
         $data = $response->json();
-
-        // Gemini usualmente responde así:
-        // candidates[0].content.parts[0].text
         $rawText = $data['candidates'][0]['content']['parts'][0]['text'] ?? '[]';
-
-        // Eliminar ```json ``` o ``` si vienen
         $cleanText = preg_replace('/```json|```/i', '', $rawText);
-
         $decoded = json_decode($cleanText, true);
 
-        // Si falla el JSON → retornamos respuesta cruda para debugging
         if (json_last_error() !== JSON_ERROR_NONE) {
             return [
                 'error' => true,
-                'message' => 'JSON inválido generado por Gemini',
+                'message' => 'JSON invalido generado por Gemini',
                 'raw' => $rawText,
             ];
         }
@@ -104,25 +100,30 @@ IMPORTANTE:
     public function generateSummary(
         string $topic,
         int $paragraphs,
-        string $format
+        string $format,
+        string $materialContent = ''
     ): array {
-        // Validamos límites por si acaso
         $paragraphs = max(1, min(10, $paragraphs));
 
         $formatDescription = match ($format) {
             'simple' => 'un resumen sencillo, claro y en prosa continua',
             'detallado' => 'un resumen detallado, bien estructurado y explicativo',
-            'bullet-points' => 'un resumen en formato de viñetas (bullet points), con ideas clave',
+            'bullet-points' => 'un resumen en formato de vinetas (bullet points), con ideas clave',
             default => 'un resumen sencillo, claro y en prosa continua',
         };
 
         $prompt = "
-Genera un resumen sobre el tema \"$topic\".
+Genera un resumen sobre el tema \"$topic\" usando exclusivamente el siguiente material como fuente. No inventes datos fuera del material.
+
+Material de referencia:
+<<<MATERIAL
+$materialContent
+<<<END
 
 Requisitos:
-- Extensión aproximada: $paragraphs párrafos.
+- Extension aproximada: $paragraphs parrafos.
 - Formato del resumen: $formatDescription.
-- Idioma: español.
+- Idioma: espanol.
 
 Si el formato es 'bullet-points', organiza el contenido como una lista de puntos.
 Devuelve la respuesta en formato JSON con esta estructura:
@@ -131,15 +132,15 @@ Devuelve la respuesta en formato JSON con esta estructura:
   \"topic\": \"...\",
   \"format\": \"simple|detallado|bullet-points\",
   \"paragraphs\": [
-    \"párrafo o ítem 1\",
-    \"párrafo o ítem 2\",
+    \"parrafo o item 1\",
+    \"parrafo o item 2\",
     ...
   ]
 }
 
 IMPORTANTE:
-- Devuelve SOLO el JSON válido.
-- No agregues texto antes o después del JSON.
+- Devuelve SOLO el JSON valido.
+- No agregues texto antes o despues del JSON.
     ";
 
         $response = Http::withHeaders([
@@ -167,15 +168,13 @@ IMPORTANTE:
 
         $data = $response->json();
         $rawText = $data['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
-
         $cleanText = preg_replace('/```json|```/i', '', $rawText);
-
         $decoded = json_decode($cleanText, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             return [
                 'error' => true,
-                'message' => 'JSON inválido generado por Gemini',
+                'message' => 'JSON invalido generado por Gemini',
                 'raw' => $rawText,
             ];
         }
@@ -186,12 +185,17 @@ IMPORTANTE:
     public function evaluateAnswer(
         string $courseTopic,
         string $question,
-        string $studentAnswer
+        string $studentAnswer,
+        string $materialContent = ''
     ): array {
         $prompt = "
 Eres un docente experto en el tema \"$courseTopic\".
+Evalua la respuesta del estudiante usando exclusivamente el siguiente material como referencia. Si falta informacion en el material, indicalo y basa la evaluacion solo en lo disponible.
 
-Debes evaluar la siguiente respuesta de un estudiante:
+Material de referencia:
+<<<MATERIAL
+$materialContent
+<<<END
 
 PREGUNTA:
 \"$question\"
@@ -200,25 +204,25 @@ RESPUESTA DEL ESTUDIANTE:
 \"$studentAnswer\"
 
 Tareas:
-1. Evalúa la precisión conceptual, claridad y profundidad.
-2. Asigna una puntuación numérica de 0 a 100.
-3. Clasifica la respuesta en una categoría: \"Excelente\", \"Buena\", \"Regular\" o \"Insuficiente\".
-4. Da retroalimentación constructiva y concreta.
-5. Señala fortalezas y aspectos a mejorar.
+1. Evalua la precision conceptual, claridad y profundidad.
+2. Asigna una puntuacion numerica de 0 a 100.
+3. Clasifica la respuesta en una categoria: \"Excelente\", \"Buena\", \"Regular\" o \"Insuficiente\".
+4. Da retroalimentacion constructiva y concreta.
+5. Senala fortalezas y aspectos a mejorar.
 
 Devuelve la respuesta en JSON con esta estructura:
 
 {
   \"score\": 0-100,
   \"grade\": \"Excelente|Buena|Regular|Insuficiente\",
-  \"feedback\": \"comentario general en 3-6 líneas\",
+  \"feedback\": \"comentario general en 3-6 lineas\",
   \"strengths\": [\"punto fuerte 1\", \"punto fuerte 2\"],
   \"improvements\": [\"mejora 1\", \"mejora 2\"]
 }
 
 IMPORTANTE:
-- Devuelve SOLO el JSON válido.
-- No agregues nada antes ni después del JSON.
+- Devuelve SOLO el JSON valido.
+- No agregues nada antes ni despues del JSON.
     ";
 
         $response = Http::withHeaders([
@@ -246,15 +250,13 @@ IMPORTANTE:
 
         $data = $response->json();
         $rawText = $data['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
-
         $cleanText = preg_replace('/```json|```/i', '', $rawText);
-
         $decoded = json_decode($cleanText, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             return [
                 'error' => true,
-                'message' => 'JSON inválido generado por Gemini',
+                'message' => 'JSON invalido generado por Gemini',
                 'raw' => $rawText,
             ];
         }

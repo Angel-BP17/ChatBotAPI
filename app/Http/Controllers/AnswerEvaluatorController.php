@@ -16,20 +16,20 @@ class AnswerEvaluatorController extends Controller
 
     public function evaluate(Request $request)
     {
-        // ✅ Validación según tu formato
         $validated = $request->validate([
             'temaCurso' => 'required|string',
             'pregunta' => 'required|string',
             'respuestaEstudiante' => 'required|string',
+            'contenidoMaterial' => 'required|string',
         ]);
 
         $result = $this->gemini->evaluateAnswer(
             $validated['temaCurso'],
             $validated['pregunta'],
-            $validated['respuestaEstudiante']
+            $validated['respuestaEstudiante'],
+            $validated['contenidoMaterial']
         );
 
-        // Si hubo error en el servicio → 500
         if (isset($result['error']) && $result['error'] === true) {
             return response()->json($result, 500);
         }

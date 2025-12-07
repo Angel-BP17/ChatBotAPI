@@ -38,11 +38,13 @@ class QuestionGeneratorController extends Controller
             'tema' => 'required|string',
             'numeroPreguntas' => 'required|integer|min:1|max:15',
             'tipoPreguntas' => 'required|string',
+            'contenidoMaterial' => 'required|string',
         ]);
 
         // Mapa front → backend
         $typeMap = [
             'mixto' => 'mixed',
+            'mixta' => 'mixed',
             'multiple_choice' => 'multiple_choice',
             'opcion_multiple' => 'multiple_choice',
             'true_false' => 'true_false',
@@ -57,7 +59,8 @@ class QuestionGeneratorController extends Controller
             $validated['curso'],
             $validated['tema'],
             $validated['numeroPreguntas'],
-            $mappedType
+            $mappedType,
+            $validated['contenidoMaterial']
         );
 
         return response()->json([
