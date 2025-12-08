@@ -73,27 +73,39 @@ IMPORTANTE: Devuelve SOLO el JSON válido, sin texto adicional.
     public function generateImage(string $tema, string $descripcion): array
     {
         try {
-            // Crear prompt final
-            $prompt = "Tema: $tema\nDescripción: $descripcion\nGenera una imagen educativa y visualmente clara.";
+            // Crear prompt final mejorado para DALL-E 3
+            $prompt = "Tema: $tema. $descripcion. Estilo: imagen educativa, para alumnos que hablan  español ,profesional, clara y visualmente atractiva.";
 
-            // Llamada al endpoint de imágenes
+            // DALL-E 3: mejor calidad de imagen
             $response = $this->client->images()->create([
-                'model' => 'gpt-image-1',   // o 'dall-e-3' si prefieres
+                'model' => 'dall-e-3',
                 'prompt' => $prompt,
                 'n' => 1,
                 'size' => '1024x1024',
-                'response_format' => 'b64_json', // para obtener base64
+                'quality' => 'standard', // 'standard' o 'hd'
             ]);
 
-            // La imagen viene codificada en base64
-            $imageBase64 = $response->data[0]->b64_json ?? null;
+            // Obtener URL de la imagen generada
+            $imageUrl = $response->data[0]->url ?? null;
 
-            if (!$imageBase64) {
+            if (!$imageUrl) {
                 return [
                     'success' => false,
                     'error' => 'La API no devolvió una imagen válida'
                 ];
             }
+
+            // Descargar la imagen y convertirla a base64
+            $imageContent = @file_get_contents($imageUrl);
+
+            if ($imageContent === false) {
+                return [
+                    'success' => false,
+                    'error' => 'No se pudo descargar la imagen desde OpenAI'
+                ];
+            }
+
+            $imageBase64 = base64_encode($imageContent);
 
             return [
                 'success' => true,
