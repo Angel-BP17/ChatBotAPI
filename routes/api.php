@@ -32,6 +32,8 @@ Route::get('/materiales/list-topics', [MaterialController::class, 'listTxtFiles'
 
 Route::get('/materiales/list-topics-with-content', [MaterialController::class, 'listTxtFilesWithContent']);
 
+Route::delete('/materiales/delete', [MaterialController::class, 'deleteMaterial']);
+
 Route::post('/images/generate', [ImageGeneratorController::class, 'generate']);
 
 Route::post('/courses/generate-topics', [CourseTopicGeneratorController::class, 'generate']);

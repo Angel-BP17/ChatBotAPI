@@ -172,6 +172,46 @@ class MaterialController extends Controller
         }
     }
 
+    /**
+     * Elimina un archivo .txt del bucket de Supabase
+     */
+    public function deleteMaterial(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'nombre' => 'required|string'
+            ]);
+
+            $fileName = $validated['nombre'];
+
+            // Intentar eliminar usando el servicio
+            $this->supabase->deleteFile($fileName);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Archivo '{$fileName}' eliminado correctamente."
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Debe enviar un nombre válido de archivo.'
+            ], 422);
+
+        } catch (\RuntimeException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => "Error inesperado: " . $e->getMessage()
+            ], 500);
+        }
+    }
+
 
     /**
      * Extrae texto de un archivo PDF

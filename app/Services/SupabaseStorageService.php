@@ -85,11 +85,11 @@ class SupabaseStorageService
             'Authorization' => 'Bearer ' . $this->apiKey,
             'Content-Type' => 'application/json',
         ])->post($endpoint, [
-            'prefix' => ltrim($path, '/'),
-            'limit' => 1000,
-            'offset' => 0,
-            'sortBy' => ['column' => 'name', 'order' => 'asc'],
-        ]);
+                    'prefix' => ltrim($path, '/'),
+                    'limit' => 1000,
+                    'offset' => 0,
+                    'sortBy' => ['column' => 'name', 'order' => 'asc'],
+                ]);
 
         if (!$response->successful()) {
             throw new \RuntimeException('Error al listar archivos: ' . $response->body());
@@ -115,5 +115,32 @@ class SupabaseStorageService
         }
 
         return $response->body();
+    }
+
+    /**
+     * Elimina un archivo del bucket de Supabase.
+     *
+     * @param string $objectPath   Ruta del archivo dentro del bucket
+     * @return bool
+     *
+     * @throws \RuntimeException Si falla la eliminación
+     */
+    public function deleteFile(string $objectPath): bool
+    {
+        $removeEndpoint = "{$this->url}/storage/v1/object/remove";
+
+        $response = Http::withHeaders([
+            'apikey' => $this->apiKey,
+            'Authorization' => 'Bearer ' . $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->post($removeEndpoint, [
+                    'prefixes' => [ltrim($objectPath, '/')]
+                ]);
+
+        if (!$response->successful()) {
+            throw new \RuntimeException('Error al eliminar archivo: ' . $response->body());
+        }
+
+        return true;
     }
 }
