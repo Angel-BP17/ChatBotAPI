@@ -11,10 +11,12 @@ use Illuminate\Http\Request;
 class QuestionGeneratorController extends Controller
 {
     protected GeminiService $gemini;
+    protected OpenAIService $openai;
 
-    public function __construct(GeminiService $gemini)
+    public function __construct(GeminiService $gemini, OpenAIService $openai)
     {
         $this->gemini = $gemini;
+        $this->openai = $openai;
     }
 
     // Lista cursos
@@ -55,7 +57,8 @@ class QuestionGeneratorController extends Controller
 
         $mappedType = $typeMap[strtolower($validated['tipoPreguntas'])] ?? 'mixed';
 
-        $questions = $this->gemini->generateQuestions(
+        $provider = 'gemini';
+        $geminiResult = $this->gemini->generateQuestions(
             $validated['curso'],
             $validated['tema'],
             $validated['numeroPreguntas'],
@@ -63,12 +66,44 @@ class QuestionGeneratorController extends Controller
             $validated['contenidoMaterial']
         );
 
+        if ($this->isErrorResponse($geminiResult)) {
+            $provider = 'openai';
+            $openAiResult = $this->openai->generateQuestions(
+                $validated['curso'],
+                $validated['tema'],
+                $validated['numeroPreguntas'],
+                $mappedType,
+                $validated['contenidoMaterial']
+            );
+
+            if ($this->isErrorResponse($openAiResult)) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'No se pudo generar preguntas con Gemini ni con OpenAI',
+                    'gemini_error' => $geminiResult,
+                    'openai_error' => $openAiResult,
+                ], 500);
+            }
+
+            $questions = $openAiResult;
+        } else {
+            $questions = $geminiResult;
+        }
+
         return response()->json([
             'curso' => $validated['curso'],
             'tema' => $validated['tema'],
             'cantidad' => $validated['numeroPreguntas'],
             'tipoPreguntas' => $validated['tipoPreguntas'],
             'questions' => $questions,
+            'provider' => $provider,
         ]);
+    }
+
+    private function isErrorResponse($payload): bool
+    {
+        return is_array($payload)
+            && array_key_exists('error', $payload)
+            && $payload['error'] === true;
     }
 }

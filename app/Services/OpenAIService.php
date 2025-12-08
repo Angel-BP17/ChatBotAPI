@@ -19,18 +19,30 @@ class OpenAIService
         string $courseName,
         string $topicTitle,
         int $numQuestions,
-        string $questionType
+        string $questionType,
+        string $materialContent = ''
     ): array {
-        $typeText = match ($questionType) {
-            'multiple_choice' => 'solo preguntas de opción múltiple con 4 alternativas y una respuesta correcta',
-            'true_false' => 'solo preguntas de verdadero/falso',
-            'open' => 'solo preguntas abiertas que requieran desarrollo',
-            default => 'una mezcla de opción múltiple, verdadero/falso y abiertas',
-        };
+        try {
+            $typeText = match ($questionType) {
+                'multiple_choice' => 'solo preguntas de opcion multiple con 4 alternativas y una respuesta correcta',
+                'true_false' => 'solo preguntas de verdadero/falso',
+                'open' => 'solo preguntas abiertas que requieran desarrollo',
+                default => 'una mezcla de opcion multiple, verdadero/falso y abiertas',
+            };
 
-        $prompt = "
-Actúa como un docente experto del curso \"$courseName\".
+            $materialBlock = $materialContent ? "
+Usa exclusivamente el siguiente material como referencia. No inventes datos fuera de este contenido.
+
+Material de referencia:
+<<<MATERIAL
+$materialContent
+<<<END
+" : 'Usa tu conocimiento general para generar las preguntas.';
+
+            $prompt = "
+Actua como un docente experto del curso \"$courseName\".
 Genera $numQuestions preguntas sobre el tema \"$topicTitle\".
+$materialBlock
 
 - Tipo de preguntas: $typeText.
 - Devuelve la respuesta en formato JSON con esta estructura:
@@ -39,63 +51,65 @@ Genera $numQuestions preguntas sobre el tema \"$topicTitle\".
   {
     \"question\": \"...\",
     \"type\": \"multiple_choice|true_false|open\",
-    \"options\": [\"opción 1\", \"opción 2\", ...], // null si no aplica
+    \"options\": [\"opcion 1\", \"opcion 2\", ...], // null si no aplica
     \"answer\": \"respuesta correcta o ejemplo de respuesta\"
   }
 ]
-IMPORTANTE: Devuelve SOLO el JSON válido, sin texto adicional.
+IMPORTANTE: Devuelve SOLO el JSON valido, sin texto adicional.
         ";
 
-        $response = $this->client->chat()->create([
-            'model' => $this->model,
-            'messages' => [
-                ['role' => 'system', 'content' => 'Eres un generador de cuestionarios para un LMS educativo.'],
-                ['role' => 'user', 'content' => $prompt],
-            ],
-        ]);
+            $response = $this->client->chat()->create([
+                'model' => $this->model,
+                'messages' => [
+                    ['role' => 'system', 'content' => 'Eres un generador de cuestionarios para un LMS educativo.'],
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+            ]);
 
-        $content = $response->choices[0]->message->content ?? '[]';
+            $content = $response->choices[0]->message->content ?? '[]';
 
-        // Intentamos decodificar el JSON
-        $data = json_decode($content, true);
+            $data = json_decode($content, true);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            // Si falló, lo devolvemos en bruto para depurar
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [
+                    'error' => true,
+                    'raw' => $content,
+                    'message' => 'JSON invalido generado por OpenAI',
+                ];
+            }
+
+            return $data;
+        } catch (\Throwable $e) {
             return [
-                'raw' => $content,
-                'error' => 'JSON inválido generado por el modelo',
+                'error' => true,
+                'message' => 'Error al comunicarse con OpenAI',
+                'details' => $e->getMessage(),
             ];
         }
-
-        return $data;
     }
 
     public function generateImage(string $tema, string $descripcion): array
     {
         try {
-            // Crear prompt final mejorado para DALL-E 3
-            $prompt = "Tema: $tema. $descripcion. Estilo: imagen educativa, para alumnos que hablan  español ,profesional, clara y visualmente atractiva.";
+            $prompt = "Tema: $tema. $descripcion. Estilo: imagen educativa, para alumnos que hablan espanol, profesional, clara y visualmente atractiva.";
 
-            // DALL-E 3: mejor calidad de imagen
             $response = $this->client->images()->create([
                 'model' => 'dall-e-3',
                 'prompt' => $prompt,
                 'n' => 1,
                 'size' => '1024x1024',
-                'quality' => 'standard', // 'standard' o 'hd'
+                'quality' => 'standard',
             ]);
 
-            // Obtener URL de la imagen generada
             $imageUrl = $response->data[0]->url ?? null;
 
             if (!$imageUrl) {
                 return [
                     'success' => false,
-                    'error' => 'La API no devolvió una imagen válida'
+                    'error' => 'La API no devolvio una imagen valida'
                 ];
             }
 
-            // Descargar la imagen y convertirla a base64
             $imageContent = @file_get_contents($imageUrl);
 
             if ($imageContent === false) {
@@ -111,7 +125,6 @@ IMPORTANTE: Devuelve SOLO el JSON válido, sin texto adicional.
                 'success' => true,
                 'image_base64' => $imageBase64
             ];
-
         } catch (\Exception $e) {
             return [
                 'success' => false,
@@ -125,42 +138,41 @@ IMPORTANTE: Devuelve SOLO el JSON válido, sin texto adicional.
         string $description,
         string $educationLevel
     ): array {
-        // Puedes ajustar cuántos temas quieres por defecto
         $numTopics = 8;
 
         $prompt = "
-Actúas como un docente experto en diseño curricular y planificación de clases.
+Actuas como un docente experto en diseno curricular y planificacion de clases.
 
 Debes proponer aproximadamente $numTopics temas o lecciones para un curso con los siguientes datos:
 
-- Título general del curso o unidad: \"$title\"
-- Descripción del curso: \"$description\"
+- Titulo general del curso o unidad: \"$title\"
+- Descripcion del curso: \"$description\"
 - Nivel educativo: \"$educationLevel\"
 
 Cada tema debe:
 - Estar redactado en lenguaje claro para estudiantes de ese nivel.
-- Seguir un orden lógico de aprendizaje (de básico a avanzado).
+- Seguir un orden logico de aprendizaje (de basico a avanzado).
 - Tener un objetivo de aprendizaje breve.
 - Indicar una cantidad aproximada de sesiones (entre 1 y 3).
 
-Devuelve la información en formato JSON con esta estructura:
+Devuelve la informacion en formato JSON con esta estructura:
 
 {
   \"course_title\": \"...\",
   \"education_level\": \"...\",
   \"topics\": [
     {
-      \"title\": \"Título del tema\",
+      \"title\": \"Titulo del tema\",
       \"objective\": \"Objetivo de aprendizaje claro\",
       \"estimated_sessions\": 2,
-      \"summary\": \"Breve descripción del contenido del tema\"
+      \"summary\": \"Breve descripcion del contenido del tema\"
     }
   ]
 }
 
 IMPORTANTE:
-- Devuelve SOLO el JSON válido.
-- No agregues explicación adicional antes ni después del JSON.
+- Devuelve SOLO el JSON valido.
+- No agregues explicacion adicional antes ni despues del JSON.
 ";
 
         $response = $this->client->chat()->create([
@@ -185,10 +197,174 @@ IMPORTANTE:
             return [
                 'error' => true,
                 'raw' => $content,
-                'message' => 'JSON inválido generado por el modelo',
+                'message' => 'JSON invalido generado por el modelo',
             ];
         }
 
         return $data;
+    }
+
+    public function generateSummary(
+        string $topic,
+        int $paragraphs,
+        string $format,
+        string $materialContent = ''
+    ): array {
+        try {
+            $paragraphs = max(1, min(10, $paragraphs));
+
+            $formatDescription = match ($format) {
+                'simple' => 'un resumen sencillo, claro y en prosa continua',
+                'detallado' => 'un resumen detallado, bien estructurado y explicativo',
+                'bullet-points' => 'un resumen en formato de vinetas (bullet points), con ideas clave',
+                default => 'un resumen sencillo, claro y en prosa continua',
+            };
+
+            $materialBlock = $materialContent ? "
+Usa exclusivamente el siguiente material como fuente. No inventes datos fuera de este contenido.
+
+Material de referencia:
+<<<MATERIAL
+$materialContent
+<<<END
+" : 'Si no hay material, utiliza conocimiento general fiable y mantente conciso.';
+
+            $prompt = "
+Genera un resumen sobre el tema \"$topic\".
+$materialBlock
+
+Requisitos:
+- Extension aproximada: $paragraphs parrafos.
+- Formato del resumen: $formatDescription.
+- Idioma: espanol.
+
+Si el formato es 'bullet-points', organiza el contenido como una lista de puntos.
+Devuelve la respuesta en formato JSON con esta estructura:
+
+{
+  \"topic\": \"...\",
+  \"format\": \"simple|detallado|bullet-points\",
+  \"paragraphs\": [
+    \"parrafo o item 1\",
+    \"parrafo o item 2\",
+    ...
+  ]
+}
+
+IMPORTANTE:
+- Devuelve SOLO el JSON valido.
+- No agregues texto antes o despues del JSON.
+            ";
+
+            $response = $this->client->chat()->create([
+                'model' => $this->model,
+                'messages' => [
+                    [
+                        'role' => 'system',
+                        'content' => 'Eres un asistente educativo que resume material en JSON estructurado.',
+                    ],
+                    [
+                        'role' => 'user',
+                        'content' => $prompt,
+                    ],
+                ],
+            ]);
+
+            $content = $response->choices[0]->message->content ?? '{}';
+            $data = json_decode($content, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [
+                    'error' => true,
+                    'message' => 'JSON invalido generado por OpenAI',
+                    'raw' => $content,
+                ];
+            }
+
+            return $data;
+        } catch (\Throwable $e) {
+            return [
+                'error' => true,
+                'message' => 'Error al comunicarse con OpenAI',
+                'details' => $e->getMessage(),
+            ];
+        }
+    }
+
+    public function evaluateAnswer(
+        string $courseTopic,
+        string $question,
+        string $studentAnswer,
+        string $materialContent = ''
+    ): array {
+        try {
+            $materialBlock = $materialContent ? "
+Evalua usando exclusivamente el siguiente material como referencia. Si falta informacion en el material, indicalo y basa la evaluacion solo en lo disponible.
+
+Material de referencia:
+<<<MATERIAL
+$materialContent
+<<<END
+" : 'Evalua usando conocimiento general del tema, pero indica claramente cualquier supuesto necesario.';
+
+            $prompt = "
+Eres un docente experto en el tema \"$courseTopic\".
+$materialBlock
+
+PREGUNTA:
+\"$question\"
+
+RESPUESTA DEL ESTUDIANTE:
+\"$studentAnswer\"
+
+Tareas:
+1. Evalua la precision conceptual, claridad y profundidad.
+2. Asigna una puntuacion numerica de 0 a 100.
+3. Clasifica la respuesta en una categoria: \"Excelente\", \"Buena\", \"Regular\" o \"Insuficiente\".
+4. Da retroalimentacion constructiva y concreta.
+5. Senala fortalezas y aspectos a mejorar.
+
+Devuelve la respuesta en JSON con esta estructura:
+
+{
+  \"score\": 0-100,
+  \"grade\": \"Excelente|Buena|Regular|Insuficiente\",
+  \"feedback\": \"comentario general en 3-6 lineas\",
+  \"strengths\": [\"punto fuerte 1\", \"punto fuerte 2\"],
+  \"improvements\": [\"mejora 1\", \"mejora 2\"]
+}
+
+IMPORTANTE:
+- Devuelve SOLO el JSON valido.
+- No agregues nada antes ni despues del JSON.
+            ";
+
+            $response = $this->client->chat()->create([
+                'model' => $this->model,
+                'messages' => [
+                    ['role' => 'system', 'content' => 'Eres un evaluador educativo que responde unicamente en JSON.'],
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+            ]);
+
+            $content = $response->choices[0]->message->content ?? '{}';
+            $data = json_decode($content, true);
+
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return [
+                    'error' => true,
+                    'message' => 'JSON invalido generado por OpenAI',
+                    'raw' => $content,
+                ];
+            }
+
+            return $data;
+        } catch (\Throwable $e) {
+            return [
+                'error' => true,
+                'message' => 'Error al comunicarse con OpenAI',
+                'details' => $e->getMessage(),
+            ];
+        }
     }
 }

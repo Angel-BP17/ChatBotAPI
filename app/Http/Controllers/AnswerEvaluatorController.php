@@ -3,15 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Services\GeminiService;
+use App\Services\OpenAIService;
 use Illuminate\Http\Request;
 
 class AnswerEvaluatorController extends Controller
 {
     protected GeminiService $gemini;
+    protected OpenAIService $openai;
 
-    public function __construct(GeminiService $gemini)
+    public function __construct(GeminiService $gemini, OpenAIService $openai)
     {
         $this->gemini = $gemini;
+        $this->openai = $openai;
     }
 
     public function evaluate(Request $request)
@@ -23,15 +26,35 @@ class AnswerEvaluatorController extends Controller
             'contenidoMaterial' => 'required|string',
         ]);
 
-        $result = $this->gemini->evaluateAnswer(
+        $provider = 'gemini';
+        $geminiResult = $this->gemini->evaluateAnswer(
             $validated['temaCurso'],
             $validated['pregunta'],
             $validated['respuestaEstudiante'],
             $validated['contenidoMaterial']
         );
 
-        if (isset($result['error']) && $result['error'] === true) {
-            return response()->json($result, 500);
+        if ($this->isErrorResponse($geminiResult)) {
+            $provider = 'openai';
+            $openAiResult = $this->openai->evaluateAnswer(
+                $validated['temaCurso'],
+                $validated['pregunta'],
+                $validated['respuestaEstudiante'],
+                $validated['contenidoMaterial']
+            );
+
+            if ($this->isErrorResponse($openAiResult)) {
+                return response()->json([
+                    'error' => true,
+                    'message' => 'No se pudo evaluar la respuesta con Gemini ni con OpenAI',
+                    'gemini_error' => $geminiResult,
+                    'openai_error' => $openAiResult,
+                ], 500);
+            }
+
+            $result = $openAiResult;
+        } else {
+            $result = $geminiResult;
         }
 
         return response()->json([
@@ -39,6 +62,14 @@ class AnswerEvaluatorController extends Controller
             'pregunta' => $validated['pregunta'],
             'respuestaEstudiante' => $validated['respuestaEstudiante'],
             'evaluation' => $result,
+            'provider' => $provider,
         ]);
+    }
+
+    private function isErrorResponse($payload): bool
+    {
+        return is_array($payload)
+            && array_key_exists('error', $payload)
+            && $payload['error'] === true;
     }
 }
