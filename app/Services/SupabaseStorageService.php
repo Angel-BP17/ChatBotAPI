@@ -127,15 +127,16 @@ class SupabaseStorageService
      */
     public function deleteFile(string $objectPath): bool
     {
-        $removeEndpoint = "{$this->url}/storage/v1/object/remove";
+        // Aseguramos que no tenga / al inicio
+        $objectPath = ltrim($objectPath, '/');
+
+        // Endpoint correcto de Supabase Storage para borrar un objeto
+        $endpoint = "{$this->url}/storage/v1/object/{$this->bucket}/{$objectPath}";
 
         $response = Http::withHeaders([
             'apikey' => $this->apiKey,
             'Authorization' => 'Bearer ' . $this->apiKey,
-            'Content-Type' => 'application/json',
-        ])->post($removeEndpoint, [
-                    'prefixes' => [ltrim($objectPath, '/')]
-                ]);
+        ])->delete($endpoint);
 
         if (!$response->successful()) {
             throw new \RuntimeException('Error al eliminar archivo: ' . $response->body());
