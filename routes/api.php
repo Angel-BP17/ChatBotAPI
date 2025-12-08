@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AnswerEvaluatorController;
+use App\Http\Controllers\ImageGeneratorController;
 use App\Http\Controllers\MaterialController;
 use App\Http\Controllers\QuestionGeneratorController;
 use App\Http\Controllers\SummaryGeneratorController;
@@ -29,3 +30,5 @@ Route::post('/materiales/upload', [MaterialController::class, 'uploadTxtToSupaba
 Route::get('/materiales/list-topics', [MaterialController::class, 'listTxtFiles']);
 
 Route::get('/materiales/list-topics-with-content', [MaterialController::class, 'listTxtFilesWithContent']);
+
+Route::post('/images/generate', [ImageGeneratorController::class, 'generate']);

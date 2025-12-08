@@ -69,4 +69,42 @@ IMPORTANTE: Devuelve SOLO el JSON válido, sin texto adicional.
 
         return $data;
     }
+
+    public function generateImage(string $tema, string $descripcion): array
+    {
+        try {
+            // Crear prompt final
+            $prompt = "Tema: $tema\nDescripción: $descripcion\nGenera una imagen educativa y visualmente clara.";
+
+            // Llamada al endpoint de imágenes
+            $response = $this->client->images()->create([
+                'model' => 'gpt-image-1',   // o 'dall-e-3' si prefieres
+                'prompt' => $prompt,
+                'n' => 1,
+                'size' => '1024x1024',
+                'response_format' => 'b64_json', // para obtener base64
+            ]);
+
+            // La imagen viene codificada en base64
+            $imageBase64 = $response->data[0]->b64_json ?? null;
+
+            if (!$imageBase64) {
+                return [
+                    'success' => false,
+                    'error' => 'La API no devolvió una imagen válida'
+                ];
+            }
+
+            return [
+                'success' => true,
+                'image_base64' => $imageBase64
+            ];
+
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'error' => 'Error al generar imagen: ' . $e->getMessage()
+            ];
+        }
+    }
 }
